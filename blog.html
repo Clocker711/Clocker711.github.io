@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>静态博客解决方案</title>
+    <style>
+        .error { color: red; }
+        .debug-info { font-size: 0.8em; color: #666; }
+    </style>
+</head>
+<body>
+    <div id="posts"></div>
+
+<script>
+// 增强版配置
+const BLOG_CONFIG = {
+    postsDir: '/posts',        // GitHub Pages绝对路径
+    fileExt: '.txt',           // 文件扩展名
+    metadataFile: '/posts.json'// 自动生成的元数据文件
+};
+
+// 增强版加载逻辑
+async function loadBlog() {
+    const debugContainer = document.createElement('div');
+    debugContainer.className = 'debug-info';
+    document.body.prepend(debugContainer);
+
+    try {
+        // 步骤1：加载元数据
+        debugContainer.innerHTML += '正在加载元数据...<br>';
+        const metadataRes = await fetch(BLOG_CONFIG.metadataFile);
+        if (!metadataRes.ok) throw new Error(`元数据加载失败: ${metadataRes.status}`);
+        const posts = await metadataRes.json();
+        
+        // 步骤2：并行加载文章内容
+        debugContainer.innerHTML += `找到${posts.length}篇文章，开始加载...<br>`;
+        const articles = await Promise.all(posts.map(async post => {
+            const res = await fetch(`${BLOG_CONFIG.postsDir}/${post.filename}${BLOG_CONFIG.fileExt}`);
+            return {
+                ...post,
+                content: await res.text(),
+                status: res.status
+            };
+        }));
+
+        // 步骤3：渲染内容
+        debugContainer.innerHTML += '开始渲染...<br>';
+        document.getElementById('posts').innerHTML = articles
+            .map(article => `
+                <article>
+                    <h2>${article.title}</h2>
+                    <p>${article.date}</p>
+                    <pre>${article.content}</pre>
+                    <p class="debug-info">文件状态: ${article.status}</p>
+                </article>
+            `).join('');
+
+    } catch (error) {
+        console.error('完整错误信息:', error);
+        document.getElementById('posts').innerHTML = `
+            <div class="error">
+                加载失败: ${error.message}<br>
+                请检查：<br>
+                1. 元数据文件是否存在（${BLOG_CONFIG.metadataFile}）<br>
+                2. 文章文件路径是否正确<br>
+                3. 浏览器控制台网络请求状态
+            </div>
+        `;
+    }
+}
+
+// 启动加载
+loadBlog();
+</script>
+</body>
+</html>
